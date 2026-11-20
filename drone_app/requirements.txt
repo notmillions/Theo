@@ -1,0 +1,30 @@
+# Theo dependency inventory
+# Informational only. This is a Flutter/Dart and Arduino project, not Python.
+# Do NOT install with pip. Flutter packages: cd drone_app && flutter pub get.
+# Exact Dart package resolution is recorded in drone_app/pubspec.lock.
+
+# Required development tools
+Flutter SDK: stable (Dart SDK constraint ^3.10.4; see drone_app/pubspec.yaml)
+Android Studio: Android SDK, Platform-Tools, Build-Tools (Android builds)
+Arduino IDE or Arduino CLI (firmware builds/uploads)
+
+# Flutter app dependencies (declared in drone_app/pubspec.yaml)
+flutter_bluetooth_serial: ^0.4.0
+permission_handler: ^12.0.1
+cupertino_icons: ^1.0.8
+
+# Flutter development dependencies
+flutter_test: SDK
+flutter_lints: ^6.0.0
+
+# Arduino libraries (install via Arduino Library Manager or arduino-cli)
+Adafruit MPU6050
+TinyGPSPlus
+DFRobot_BMM150
+
+# Arduino core libraries (provided by the selected board package)
+Wire
+Servo
+SoftwareSerial
+
+# The board model/FQBN is not specified; install the matching Arduino core.
