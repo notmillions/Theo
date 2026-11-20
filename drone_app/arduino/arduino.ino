@@ -46,6 +46,8 @@ unsigned long loop_timer;
 unsigned long telemetry_timer = 0;
 bool mpu_ok = false;
 bool armed = false;
+// Debug moteur: active des impressions lorsque writeMotors est appelé
+const bool MOTOR_DEBUG = true;
 
 // Multiplexeur
 void tcaselect(uint8_t i) {
@@ -112,28 +114,64 @@ void setup() {
 void loop() {
   // --- 1. BLUETOOTH (GAZ PUISSANTS) ---
   btSerial.listen();
-  if (btSerial.available() > 0) {
-    char cmd = btSerial.read();
-   
-    // Debug PC
-    Serial.print("Reçu: "); Serial.println(cmd);
+  while (btSerial.available() > 0) {
+    char ch = (char)btSerial.read();
 
-    if (cmd == 'U') {
-      input_THROTTLE += 50;
-      if(input_THROTTLE > 1800) input_THROTTLE = 1800;
-    }
-    else if (cmd == 'D') {
-      input_THROTTLE -= 50;
-      if(input_THROTTLE < 1100 && armed) input_THROTTLE = 1100;
-    }
-    else if (cmd == 'S') {
-      input_THROTTLE = 1000;
-      armed = false;
-      reset_pid(); // C'est ici que ça plantait avant !
-    }
-    else if (cmd == 'A') {
-       input_THROTTLE = 1150;
-       armed = true;
+    // Debug trace
+    Serial.print("BT ch: "); Serial.println(ch);
+
+    if (!btReceiving) {
+      // Début de trame ou commande simple
+      if (ch == '<') {
+        btReceiving = true;
+        btFramePos = 0;
+        btFrameBuf[btFramePos++] = ch;
+      } else if (ch == 'U') {
+        input_THROTTLE += 50;
+        if (input_THROTTLE > 1800) input_THROTTLE = 1800;
+      } else if (ch == 'D') {
+        input_THROTTLE -= 50;
+        if (input_THROTTLE < 1100 && armed) input_THROTTLE = 1100;
+      } else if (ch == 'S') {
+        input_THROTTLE = 1000;
+        armed = false;
+        reset_pid();
+      } else if (ch == 'T') {
+        // Test moteur via Bluetooth - retirer les hélices avant d'exécuter
+        Serial.println("BT: motor test requested (T)");
+        // Lance une séquence de test courte
+        bool prevArmed = armed;
+        armed = true;
+        for (int p = 1100; p <= 1400; p += 100) {
+          writeMotors(p, p, p, p);
+          delay(400);
+        }
+        writeMotors(1000, 1000, 1000, 1000);
+        armed = prevArmed;
+      } else if (ch == 'A') {
+        input_THROTTLE = 1150;
+        armed = true;
+      } else {
+        // ignore other single bytes (newline, carriage return, etc.)
+      }
+    } else {
+      // En cours de réception d'une trame
+      if (ch == '>') {
+        if (btFramePos < sizeof(btFrameBuf) - 1) btFrameBuf[btFramePos++] = ch;
+        btFrameBuf[btFramePos] = '\0';
+        processBtFrame(btFrameBuf);
+        btReceiving = false;
+        btFramePos = 0;
+      } else {
+        if (btFramePos < sizeof(btFrameBuf) - 1) {
+          btFrameBuf[btFramePos++] = ch;
+        } else {
+          // overflow: abandonner cette trame
+          btReceiving = false;
+          btFramePos = 0;
+          Serial.println("BT frame overflow - discarded");
+        }
+      }
     }
   }
 
@@ -204,7 +242,6 @@ void loop() {
 }
 
 // --- OUTILS ---
-
 // C'est cette fonction qui manquait !
 void reset_pid() {
   pid_i_mem_roll = 0;
@@ -216,7 +253,38 @@ void reset_pid() {
   pid_output_roll = 0;
   pid_output_pitch = 0;
   pid_output_yaw = 0;
+}
+
+// --- Parser Bluetooth: support des trames <th,pit,rol,yaw> et des commandes simples A/D/S/U
+char btFrameBuf[128];
+size_t btFramePos = 0;
+bool btReceiving = false;
+
+void processBtFrame(const char* frame) {
+  // frame attendu: <1000,1513,1410,1500>
+  int v1, v2, v3, v4;
+  int matched = sscanf(frame, "<%d,%d,%d,%d>", &v1, &v2, &v3, &v4);
+  if (matched == 4) {
+    // Si armé, appliquer directement les commandes (mode direct)
+    if (armed) {
+      // Sécurité: clamp
+      v1 = constrain(v1, 1000, 2000);
+      v2 = constrain(v2, 1000, 2000);
+      v3 = constrain(v3, 1000, 2000);
+      v4 = constrain(v4, 1000, 2000);
+      // Appliquer
+      writeMotors(v1, v2, v3, v4);
+      Serial.print("OK: "); Serial.println(frame);
+      btSerial.print("OK:"); btSerial.println(frame);
+    } else {
+      Serial.print("IGNORED (disarmed): "); Serial.println(frame);
+      btSerial.print("BAD:DISARMED"); btSerial.println(frame);
+    }
+  } else {
+    Serial.print("BAD: "); Serial.println(frame);
+    btSerial.print("BAD:"); btSerial.println(frame);
   }
+}
 
 void calculate_pid(){
   // PITCH
@@ -257,4 +325,11 @@ void read_mpu_raw(){
 void writeMotors(int m1, int m2, int m3, int m4){
    motor1.writeMicroseconds(m1); motor2.writeMicroseconds(m2);
    motor3.writeMicroseconds(m3); motor4.writeMicroseconds(m4);
+  if (MOTOR_DEBUG) {
+    Serial.print("MOTOR DEBUG -> ");
+    Serial.print(m1); Serial.print(',');
+    Serial.print(m2); Serial.print(',');
+    Serial.print(m3); Serial.print(',');
+    Serial.println(m4);
+  }
 }

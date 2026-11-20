@@ -282,7 +282,7 @@ colorScheme: ColorScheme.fromSeed(
 ## 🔄 Roadmap intégration
 
 1. **Phase 1** (Actuellement): App Flutter compilable, layout complet, simulation
-2. **Phase 2**: Intégration Bluetooth (flutter_blue)
+ Phase 2**: Intégration Bluetooth (flutter_blue)
 3. **Phase 3**: Implémentation protocole UART/Serial
 4. **Phase 4**: Calibrage joysticks et réglages PID
 5. **Phase 5**: Tests avec drone réel
